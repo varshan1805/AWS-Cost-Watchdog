@@ -37,7 +37,7 @@ GitHub never sees them.
 ```powershell
 cd terraform\bootstrap
 terraform init
-terraform apply -var="github_repo=varshan1805/aws-cost-watchdog"
+terraform apply -var="github_repo=varshan1805/AWS-Cost-Watchdog"
 ```
 
 Type `yes`. Note the two outputs:
@@ -97,8 +97,8 @@ Open **AWS CloudShell** (the `>_` icon at the top of the AWS console). It's a br
 AWS CLI already set up.
 
 ```bash
-git clone https://github.com/varshan1805/aws-cost-watchdog.git
-cd aws-cost-watchdog
+git clone https://github.com/varshan1805/AWS-Cost-Watchdog.git
+cd AWS-Cost-Watchdog
 bash scripts/create_test_waste.sh
 ```
 

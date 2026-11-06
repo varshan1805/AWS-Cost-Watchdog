@@ -5,7 +5,7 @@
 #
 #   cd terraform/bootstrap
 #   terraform init
-#   terraform apply -var="github_repo=varshan1805/aws-cost-watchdog"
+#   terraform apply -var="github_repo=varshan1805/AWS-Cost-Watchdog"
 #
 # State for this bootstrap stays local. That's fine: it's three resources you set up once.
 
@@ -34,7 +34,7 @@ variable "project" {
 }
 
 variable "github_repo" {
-  description = "owner/name of the GitHub repo allowed to deploy, e.g. varshan1805/aws-cost-watchdog"
+  description = "owner/name of the GitHub repo allowed to deploy, e.g. varshan1805/AWS-Cost-Watchdog"
   type        = string
 }
 
