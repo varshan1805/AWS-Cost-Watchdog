@@ -1,0 +1,25 @@
+flowchart LR
+    subgraph GH["GitHub"]
+        CODE["Repo: Python + Terraform"] --> GA["GitHub Actions<br/>test, plan, apply"]
+    end
+    GA -- "OIDC, no stored keys" --> ROLE["IAM deploy role"]
+    ROLE --> TF[("S3<br/>Terraform state")]
+    ROLE -- "terraform apply" --> AWS
+
+    subgraph AWS["AWS account (ap-south-1)"]
+        S1["EventBridge Scheduler<br/>08:00 IST daily"] --> SCAN["Lambda: scanner"]
+        S2["EventBridge Scheduler<br/>20:00 stop / 09:00 start<br/>Mon-Fri IST"] --> SCHED["Lambda: scheduler"]
+
+        SCAN -- "read only" --> INV["EC2, EBS, snapshots,<br/>Elastic IPs"]
+        SCAN -- "7-day CPU" --> CW["CloudWatch metrics"]
+        SCAN -- "history" --> DDB[("DynamoDB<br/>findings")]
+        SCAN -- "daily report" --> SNS["SNS topic"]
+
+        SCHED -- "only Schedule=office-hours" --> EC2["Tagged dev/test<br/>instances"]
+
+        ALARM["CloudWatch alarms<br/>Lambda errors"] --> SNS
+        BUD["AWS Budgets<br/>80% actual, 100% forecast"]
+    end
+
+    SNS --> MAIL(["Email"])
+    BUD --> MAIL

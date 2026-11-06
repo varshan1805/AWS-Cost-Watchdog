@@ -1,0 +1,92 @@
+name: Deploy
+
+# Runs on every push to main that touches the Lambda code or Terraform,
+# and can be started by hand from the Actions tab.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "terraform/*.tf"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # needed to get the OIDC token AWS trusts
+
+# Never run two applies at once against the same state
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_aws_region: ${{ vars.AWS_REGION || 'ap-south-1' }}
+  TF_VAR_scan_regions: ${{ format('["{0}"]', vars.AWS_REGION || 'ap-south-1') }}
+  TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+  TF_VAR_scheduler_dry_run: ${{ vars.SCHEDULER_DRY_RUN || 'true' }}
+  TF_VAR_lookback_days: ${{ vars.LOOKBACK_DAYS || '7' }}
+  TF_VAR_snapshot_max_age_days: ${{ vars.SNAPSHOT_MAX_AGE_DAYS || '90' }}
+  TF_VAR_monthly_budget_usd: ${{ vars.MONTHLY_BUDGET_USD || '10' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  deploy:
+    needs: test
+    # Skipped (not failed) until the repo is set up, so a fresh fork doesn't go red
+    if: ${{ vars.AWS_DEPLOY_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the repo is set up
+        run: |
+          missing=""
+          [ -z "${{ vars.TF_STATE_BUCKET }}" ] && missing="$missing TF_STATE_BUCKET(variable)"
+          [ -z "${{ secrets.ALERT_EMAIL }}" ] && missing="$missing ALERT_EMAIL(secret)"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo settings:$missing. See docs/deploy.md step 3."
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.10.5"
+
+      - name: Init
+        run: >
+          terraform init -input=false
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+          -backend-config="key=cost-watchdog/terraform.tfstate"
+          -backend-config="region=${{ env.AWS_REGION }}"
+          -backend-config="use_lockfile=true"
+          -backend-config="encrypt=true"
+
+      - name: Plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Apply
+        run: terraform apply -input=false tfplan
+
+      - name: Outputs
+        run: terraform output
